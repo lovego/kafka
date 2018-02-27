@@ -92,6 +92,7 @@ func (c Consumer) Log(msg *sarama.ConsumerMessage, resp []byte) {
 		Resp: json.RawMessage(resp),
 	}
 	if buf, err := json.Marshal(log); err == nil {
+		buf = append(buf, '\n')
 		if _, err := c.Logfile.Write(buf); err != nil {
 			c.Logger.Error(err)
 		}
