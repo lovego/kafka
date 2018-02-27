@@ -15,8 +15,8 @@ type Consumer struct {
 	Handler    func(*sarama.ConsumerMessage) (string, interface{})
 	Producer   sarama.SyncProducer
 	RespTopic  string
-	Logger     *logger.Logger
 	Logfile    io.Writer
+	Logger     *logger.Logger
 }
 
 func (c Consumer) Consume(topics []string, group string) {
