@@ -43,10 +43,15 @@ func Consume(kafkaAddrs, topics []string, group string, wait time.Duration) (
 		case msg := <-consumer.Messages():
 			msgs = append(msgs, msg)
 			consumer.MarkOffset(msg, "")
+			if err = consumer.CommitOffsets(); err != nil {
+				return
+			}
 		case err = <-consumer.Errors():
 			return
 		case <-time.After(wait): // default CommitInterval is 1s.
-			return
+			if len(msgs) > 0 {
+				return
+			}
 		}
 	}
 	return

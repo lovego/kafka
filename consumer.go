@@ -19,10 +19,11 @@ type Consumer struct {
 	Logger     *logger.Logger
 }
 
-func (c Consumer) Consume(topics []string, group string) {
+func (c Consumer) Consume(topics []string, group string, commit bool) {
 	conf := cluster.NewConfig()
 	conf.Consumer.Return.Errors = true
 	// conf.Group.Return.Notifications = true
+	// conf.Consumer.Offsets.CommitInterval = time.Second
 	conf.Consumer.Offsets.Initial = sarama.OffsetOldest
 	consumer, err := cluster.NewConsumer(c.KafkaAddrs, group, topics, conf)
 	if err != nil {
@@ -42,10 +43,17 @@ func (c Consumer) Consume(topics []string, group string) {
 		case msg := <-consumer.Messages():
 			c.Process(msg)
 			consumer.MarkOffset(msg, "")
+			if commit {
+				if err := consumer.CommitOffsets(); err != nil {
+					c.Logger.Error(err)
+				}
+			}
 		case err := <-consumer.Errors():
 			c.Logger.Error(err)
-		case ntf := <-consumer.Notifications():
-			c.Logger.Print(ntf)
+			/*
+				case ntf := <-consumer.Notifications():
+					c.Logger.Print(ntf)
+			*/
 		}
 	}
 }
