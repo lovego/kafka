@@ -61,7 +61,7 @@ func (c Consumer) Consume(topics []string, group string, commit bool) {
 func (c Consumer) Process(msg *sarama.ConsumerMessage) {
 	respTopicSuffix, resp := c.Handler(msg)
 	respBytes, err := json.Marshal(resp)
-	if err == nil {
+	if resp != nil && err == nil {
 		if respTopic := c.RespTopic + respTopicSuffix; respTopic != "" {
 			c.Produce(respTopic, respBytes)
 		}
