@@ -13,42 +13,44 @@ import (
 type Consumer struct {
 	KafkaAddrs []string
 	Handler    func(*sarama.ConsumerMessage) (string, interface{})
+	Client     *cluster.Client
+	Consumer   *cluster.Consumer
 	Producer   sarama.SyncProducer
 	RespTopic  string
 	Logfile    io.Writer
 	Logger     *logger.Logger
 }
 
-func (c Consumer) Consume(topics []string, group string, commit bool) {
-	conf := cluster.NewConfig()
-	conf.Consumer.Return.Errors = true
-	// conf.Group.Return.Notifications = true
-	// conf.Consumer.Offsets.CommitInterval = time.Second
-	conf.Consumer.Offsets.Initial = sarama.OffsetOldest
-	consumer, err := cluster.NewConsumer(c.KafkaAddrs, group, topics, conf)
-	if err != nil {
-		c.Logger.Error(err)
-		return
-	}
-	defer consumer.Close()
-
+func (c *Consumer) Consume(group string, topics []string, commit bool) {
 	defer func() {
 		if c.Producer != nil {
 			c.Producer.Close()
 		}
+		if c.Consumer != nil {
+			c.Consumer.Close()
+		}
+		if c.Client != nil {
+			c.Client.Close()
+		}
 	}()
 
+	if !c.setup(group, topics) {
+		return
+	}
+
+	var messagesChannel = c.Consumer.Messages()
+	var errorsChannel = c.Consumer.Errors()
 	for {
 		select {
-		case msg := <-consumer.Messages():
+		case msg := <-messagesChannel:
 			c.Process(msg)
-			consumer.MarkOffset(msg, "")
+			c.Consumer.MarkOffset(msg, "")
 			if commit {
-				if err := consumer.CommitOffsets(); err != nil {
+				if err := c.Consumer.CommitOffsets(); err != nil {
 					c.Logger.Error(err)
 				}
 			}
-		case err := <-consumer.Errors():
+		case err := <-errorsChannel:
 			c.Logger.Error(err)
 			/*
 				case ntf := <-consumer.Notifications():
@@ -58,7 +60,40 @@ func (c Consumer) Consume(topics []string, group string, commit bool) {
 	}
 }
 
-func (c Consumer) Process(msg *sarama.ConsumerMessage) {
+func (c *Consumer) setup(group string, topics []string) bool {
+	conf := cluster.NewConfig()
+	conf.Producer.Return.Successes = true
+	conf.Consumer.Return.Errors = true
+	conf.Consumer.Offsets.Initial = sarama.OffsetOldest
+	// conf.Consumer.Offsets.CommitInterval = time.Second
+	// conf.Group.Return.Notifications = true
+	var client, err = cluster.NewClient(c.KafkaAddrs, conf)
+	if err != nil {
+		c.Logger.Error(err)
+		return false
+	} else {
+		c.Client = client
+	}
+
+	consumer, err := cluster.NewConsumerFromClient(client, group, topics)
+	if err != nil {
+		c.Logger.Error(err)
+		return false
+	} else {
+		c.Consumer = consumer
+	}
+
+	if producer, err := sarama.NewSyncProducerFromClient(client); err != nil {
+		c.Logger.Error(err)
+		return false
+	} else {
+		c.Producer = producer
+	}
+
+	return true
+}
+
+func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
 	respTopicSuffix, resp := c.Handler(msg)
 	respBytes, err := json.Marshal(resp)
 	if resp != nil && err == nil {
@@ -72,15 +107,6 @@ func (c Consumer) Process(msg *sarama.ConsumerMessage) {
 }
 
 func (c *Consumer) Produce(topic string, resp []byte) {
-	if c.Producer == nil {
-		producer, err := sarama.NewSyncProducer(c.KafkaAddrs, nil)
-		if err != nil {
-			c.Logger.Error(err)
-			return
-		}
-		c.Producer = producer
-	}
-
 	if _, _, err := c.Producer.SendMessage(&sarama.ProducerMessage{
 		Topic: topic,
 		Value: sarama.ByteEncoder(resp),
@@ -89,7 +115,7 @@ func (c *Consumer) Produce(topic string, resp []byte) {
 	}
 }
 
-func (c Consumer) Log(msg *sarama.ConsumerMessage, resp []byte) {
+func (c *Consumer) Log(msg *sarama.ConsumerMessage, resp []byte) {
 	var log = struct {
 		At   string          `json:"at"`
 		Msg  json.RawMessage `json:"msg"`
