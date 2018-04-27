@@ -94,6 +94,7 @@ func (c *Consumer) setup(group string, topics []string) bool {
 }
 
 func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
+	at := time.Now()
 	respTopicSuffix, resp := c.Handler(msg)
 	respBytes, err := json.Marshal(resp)
 	if resp != nil && err == nil {
@@ -103,7 +104,7 @@ func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
 	} else {
 		c.Logger.Error(err)
 	}
-	c.Log(msg, respBytes)
+	c.Log(at, msg, respBytes)
 }
 
 func (c *Consumer) Produce(topic string, resp []byte) {
@@ -115,15 +116,17 @@ func (c *Consumer) Produce(topic string, resp []byte) {
 	}
 }
 
-func (c *Consumer) Log(msg *sarama.ConsumerMessage, resp []byte) {
+func (c *Consumer) Log(at time.Time, msg *sarama.ConsumerMessage, resp []byte) {
 	var log = struct {
-		At   string          `json:"at"`
-		Msg  json.RawMessage `json:"msg"`
-		Resp json.RawMessage `json:"resp"`
+		At       string          `json:"at"`
+		Duration float64         `json:"duration"`
+		Msg      json.RawMessage `json:"msg"`
+		Resp     json.RawMessage `json:"resp"`
 	}{
-		At:   time.Now().Format(time.RFC3339),
-		Msg:  json.RawMessage(msg.Value),
-		Resp: json.RawMessage(resp),
+		At:       at.Format(time.RFC3339),
+		Duration: float64(time.Since(at)) / 1e6,
+		Msg:      json.RawMessage(msg.Value),
+		Resp:     json.RawMessage(resp),
 	}
 	if buf, err := json.Marshal(log); err == nil {
 		buf = append(buf, '\n')
