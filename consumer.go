@@ -119,12 +119,12 @@ func (c *Consumer) Produce(topic string, resp []byte) {
 func (c *Consumer) Log(at time.Time, msg *sarama.ConsumerMessage, resp []byte) {
 	var log = struct {
 		At       string          `json:"at"`
-		Duration float64         `json:"duration"`
+		Duration int64           `json:"duration"`
 		Msg      json.RawMessage `json:"msg"`
 		Resp     json.RawMessage `json:"resp"`
 	}{
 		At:       at.Format(time.RFC3339),
-		Duration: float64(time.Since(at)) / 1e6,
+		Duration: int64(time.Since(at) / time.Millisecond),
 		Msg:      json.RawMessage(msg.Value),
 		Resp:     json.RawMessage(resp),
 	}
