@@ -1,6 +1,7 @@
 package kafka
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"time"
@@ -8,11 +9,12 @@ import (
 	"github.com/Shopify/sarama"
 	cluster "github.com/bsm/sarama-cluster"
 	"github.com/lovego/logger"
+	"github.com/lovego/tracer"
 )
 
 type Consumer struct {
 	KafkaAddrs []string
-	Handler    func(*sarama.ConsumerMessage) (string, interface{})
+	Handler    func(context.Context, *sarama.ConsumerMessage) (string, interface{})
 	Client     *cluster.Client
 	Consumer   *cluster.Consumer
 	Producer   sarama.SyncProducer
@@ -94,8 +96,8 @@ func (c *Consumer) setup(group string, topics []string) bool {
 }
 
 func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
-	at := time.Now()
-	respTopicSuffix, resp := c.Handler(msg)
+	span := &tracer.Span{At: time.Now()}
+	respTopicSuffix, resp := c.Handler(tracer.Context(context.Background(), span), msg)
 	respBytes, err := json.Marshal(resp)
 	if resp != nil && err == nil {
 		if respTopic := c.RespTopic + respTopicSuffix; respTopic != "" {
@@ -104,7 +106,8 @@ func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
 	} else {
 		c.Logger.Error(err)
 	}
-	c.Log(at, msg, respBytes)
+	span.Finish()
+	c.Log(span, msg, respBytes)
 }
 
 func (c *Consumer) Produce(topic string, resp []byte) {
@@ -116,17 +119,15 @@ func (c *Consumer) Produce(topic string, resp []byte) {
 	}
 }
 
-func (c *Consumer) Log(at time.Time, msg *sarama.ConsumerMessage, resp []byte) {
+func (c *Consumer) Log(span *tracer.Span, msg *sarama.ConsumerMessage, resp []byte) {
 	var log = struct {
-		At       string          `json:"at"`
-		Duration int64           `json:"duration"`
-		Msg      json.RawMessage `json:"msg"`
-		Resp     json.RawMessage `json:"resp"`
+		*tracer.Span
+		Msg  json.RawMessage `json:"msg"`
+		Resp json.RawMessage `json:"resp"`
 	}{
-		At:       at.Format(time.RFC3339),
-		Duration: int64(time.Since(at) / time.Millisecond),
-		Msg:      json.RawMessage(msg.Value),
-		Resp:     json.RawMessage(resp),
+		Span: span,
+		Msg:  json.RawMessage(msg.Value),
+		Resp: json.RawMessage(resp),
 	}
 	if buf, err := json.Marshal(log); err == nil {
 		buf = append(buf, '\n')
