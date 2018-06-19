@@ -3,23 +3,21 @@ package kafka
 import (
 	"context"
 	"encoding/json"
-	"io"
+	"os"
 	"time"
 
 	"github.com/Shopify/sarama"
 	cluster "github.com/bsm/sarama-cluster"
 	"github.com/lovego/logger"
-	"github.com/lovego/tracer"
 )
 
 type Consumer struct {
 	KafkaAddrs []string
-	Handler    func(context.Context, *sarama.ConsumerMessage) (string, interface{})
+	Handler    func(context.Context, *sarama.ConsumerMessage, int) (string, interface{}, bool, error)
 	Client     *cluster.Client
 	Consumer   *cluster.Consumer
 	Producer   sarama.SyncProducer
 	RespTopic  string
-	Logfile    io.Writer
 	Logger     *logger.Logger
 }
 
@@ -96,45 +94,59 @@ func (c *Consumer) setup(group string, topics []string) bool {
 }
 
 func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
-	span := &tracer.Span{At: time.Now()}
-	respTopicSuffix, resp := c.Handler(tracer.Context(context.Background(), span), msg)
-	respBytes, err := json.Marshal(resp)
-	if resp != nil && err == nil {
-		if respTopic := c.RespTopic + respTopicSuffix; respTopic != "" {
-			c.Produce(respTopic, respBytes)
+	debug := os.Getenv(`debug-kafka`) != ``
+
+	var retryTimes = 0
+	var respBytes []byte
+	var endLoop bool
+	var workFunc = func(ctx context.Context) error {
+		respTopicSuffix, resp, retry, err := c.Handler(ctx, msg, retryTimes)
+		if !retry {
+			endLoop = true
 		}
-	} else {
-		c.Logger.Error(err)
+		if err != nil {
+			return err
+		}
+		if resp != nil {
+			respBytes, err = json.Marshal(resp)
+			if err != nil {
+				return err
+			}
+			if respTopic := c.RespTopic + respTopicSuffix; respTopic != "" {
+				if err := c.Produce(respTopic, respBytes); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	}
-	span.Finish()
-	c.Log(span, msg, respBytes)
+	var fieldsFunc = func(f *logger.Fields) {
+		f.With(`msg`, json.RawMessage(msg.Value))
+		f.With(`resp`, json.RawMessage(respBytes))
+	}
+
+	var wait = time.Second
+	for {
+		c.Logger.Record(debug, workFunc, nil, fieldsFunc)
+		if endLoop {
+			break
+		}
+		retryTimes++
+		if wait < time.Minute {
+			wait += wait
+			if wait > time.Minute {
+				wait = time.Minute
+			}
+		}
+	}
 }
 
-func (c *Consumer) Produce(topic string, resp []byte) {
+func (c *Consumer) Produce(topic string, resp []byte) error {
 	if _, _, err := c.Producer.SendMessage(&sarama.ProducerMessage{
 		Topic: topic,
 		Value: sarama.ByteEncoder(resp),
 	}); err != nil {
-		c.Logger.Error(err)
+		return err
 	}
-}
-
-func (c *Consumer) Log(span *tracer.Span, msg *sarama.ConsumerMessage, resp []byte) {
-	var log = struct {
-		*tracer.Span
-		Msg  json.RawMessage `json:"msg"`
-		Resp json.RawMessage `json:"resp"`
-	}{
-		Span: span,
-		Msg:  json.RawMessage(msg.Value),
-		Resp: json.RawMessage(resp),
-	}
-	if buf, err := json.Marshal(log); err == nil {
-		buf = append(buf, '\n')
-		if _, err := c.Logfile.Write(buf); err != nil {
-			c.Logger.Error(err)
-		}
-	} else {
-		c.Logger.Error(err)
-	}
+	return nil
 }
