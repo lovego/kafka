@@ -8,6 +8,7 @@ import (
 	cluster "github.com/bsm/sarama-cluster"
 )
 
+// do produce through specified kafka addresses, topic and content
 func Produce(kafkaAddrs []string, topic string, content interface{}) error {
 	producer, err := sarama.NewSyncProducer(kafkaAddrs, nil)
 	if err != nil {
@@ -26,6 +27,7 @@ func Produce(kafkaAddrs []string, topic string, content interface{}) error {
 	return err
 }
 
+// do consume through specified kafka addresses, topics, group and wait time
 func Consume(kafkaAddrs, topics []string, group string, wait time.Duration) (
 	msgs []*sarama.ConsumerMessage, err error,
 ) {

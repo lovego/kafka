@@ -11,6 +11,7 @@ import (
 	"github.com/lovego/logger"
 )
 
+// kafka consumer struct
 type Consumer struct {
 	KafkaAddrs []string
 	Handler    func(context.Context, *sarama.ConsumerMessage, int) (string, interface{}, bool, error)
@@ -21,6 +22,7 @@ type Consumer struct {
 	Logger     *logger.Logger
 }
 
+// start consume, and it can produce response
 func (c *Consumer) Consume(group string, topics []string, commit bool) {
 	defer c.Close()
 
@@ -61,28 +63,26 @@ func (c *Consumer) setup(group string, topics []string) bool {
 	if err != nil {
 		c.Logger.Error(err)
 		return false
-	} else {
-		c.Client = client
 	}
+	c.Client = client
 
 	consumer, err := cluster.NewConsumerFromClient(client, group, topics)
 	if err != nil {
 		c.Logger.Error(err)
 		return false
-	} else {
-		c.Consumer = consumer
 	}
+	c.Consumer = consumer
 
 	if producer, err := sarama.NewSyncProducerFromClient(client); err != nil {
 		c.Logger.Error(err)
 		return false
-	} else {
-		c.Producer = producer
 	}
+	c.Producer = producer
 
 	return true
 }
 
+// process data after consume
 func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
 	debug := os.Getenv("debug-kafka") != ""
 
@@ -122,6 +122,7 @@ func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
 	}
 }
 
+// produce the response if necessary
 func (c *Consumer) Produce(topic string, resp []byte) error {
 	if _, _, err := c.Producer.SendMessage(&sarama.ProducerMessage{
 		Topic: topic,
@@ -132,6 +133,7 @@ func (c *Consumer) Produce(topic string, resp []byte) error {
 	return nil
 }
 
+// close Consumer
 func (c *Consumer) Close() {
 	if c.Producer != nil {
 		c.Producer.Close()
