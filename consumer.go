@@ -22,17 +22,7 @@ type Consumer struct {
 }
 
 func (c *Consumer) Consume(group string, topics []string, commit bool) {
-	defer func() {
-		if c.Producer != nil {
-			c.Producer.Close()
-		}
-		if c.Consumer != nil {
-			c.Consumer.Close()
-		}
-		if c.Client != nil {
-			c.Client.Close()
-		}
-	}()
+	defer c.Close()
 
 	if !c.setup(group, topics) {
 		return
@@ -94,35 +84,26 @@ func (c *Consumer) setup(group string, topics []string) bool {
 }
 
 func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
-	debug := os.Getenv(`debug-kafka`) != ``
+	debug := os.Getenv("debug-kafka") != ""
 
 	var retryTimes = 0
 	var respBytes []byte
 	var endLoop bool
 	var workFunc = func(ctx context.Context) error {
 		respTopicSuffix, resp, retry, err := c.Handler(ctx, msg, retryTimes)
-		if !retry {
-			endLoop = true
-		}
-		if err != nil {
+		respTopic := c.RespTopic + respTopicSuffix
+		endLoop = !retry
+		if respTopic == "" || resp == nil || err != nil {
 			return err
 		}
-		if resp != nil {
-			respBytes, err = json.Marshal(resp)
-			if err != nil {
-				return err
-			}
-			if respTopic := c.RespTopic + respTopicSuffix; respTopic != "" {
-				if err := c.Produce(respTopic, respBytes); err != nil {
-					return err
-				}
-			}
+		if respBytes, err = json.Marshal(resp); err != nil {
+			return err
 		}
-		return nil
+		return c.Produce(respTopic, respBytes)
 	}
 	var fieldsFunc = func(f *logger.Fields) {
-		f.With(`msg`, json.RawMessage(msg.Value))
-		f.With(`resp`, json.RawMessage(respBytes))
+		f.With("msg", json.RawMessage(msg.Value))
+		f.With("resp", json.RawMessage(respBytes))
 	}
 
 	var wait = time.Second
@@ -149,4 +130,16 @@ func (c *Consumer) Produce(topic string, resp []byte) error {
 		return err
 	}
 	return nil
+}
+
+func (c *Consumer) Close() {
+	if c.Producer != nil {
+		c.Producer.Close()
+	}
+	if c.Consumer != nil {
+		c.Consumer.Close()
+	}
+	if c.Client != nil {
+		c.Client.Close()
+	}
 }
