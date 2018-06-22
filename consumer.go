@@ -11,6 +11,8 @@ import (
 	"github.com/lovego/logger"
 )
 
+var debug = os.Getenv("debug-kafka") != ""
+
 // kafka consumer struct
 type Consumer struct {
 	KafkaAddrs []string
@@ -84,8 +86,6 @@ func (c *Consumer) setup(group string, topics []string) bool {
 
 // process data after consume
 func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
-	debug := os.Getenv("debug-kafka") != ""
-
 	var retryTimes = 0
 	var respBytes []byte
 	var endLoop bool
