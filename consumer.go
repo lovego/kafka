@@ -24,6 +24,15 @@ type Consumer struct {
 	Logger     *logger.Logger
 }
 
+// kafka processor struct
+type Processor struct {
+	retryTimes int
+	respBytes  []byte
+	endLoop    bool
+	WorkFunc   func(ctx context.Context) error
+	FieldsFunc func(f *logger.Fields)
+}
+
 // start consume, and it can produce response
 func (c *Consumer) Consume(group string, topics []string, commit bool) {
 	defer c.Close()
@@ -61,7 +70,7 @@ func (c *Consumer) setup(group string, topics []string) bool {
 	conf.Consumer.Offsets.Initial = sarama.OffsetOldest
 	// conf.Consumer.Offsets.CommitInterval = time.Second
 	// conf.Group.Return.Notifications = true
-	var client, err = cluster.NewClient(c.KafkaAddrs, conf)
+	client, err := cluster.NewClient(c.KafkaAddrs, conf)
 	if err != nil {
 		c.Logger.Error(err)
 		return false
@@ -75,7 +84,8 @@ func (c *Consumer) setup(group string, topics []string) bool {
 	}
 	c.Consumer = consumer
 
-	if producer, err := sarama.NewSyncProducerFromClient(client); err != nil {
+	producer, err := sarama.NewSyncProducerFromClient(client)
+	if err != nil {
 		c.Logger.Error(err)
 		return false
 	}
@@ -86,33 +96,15 @@ func (c *Consumer) setup(group string, topics []string) bool {
 
 // process data after consume
 func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
-	var retryTimes = 0
-	var respBytes []byte
-	var endLoop bool
-	var workFunc = func(ctx context.Context) error {
-		respTopicSuffix, resp, retry, err := c.Handler(ctx, msg, retryTimes)
-		respTopic := c.RespTopic + respTopicSuffix
-		endLoop = !retry
-		if respTopic == "" || resp == nil || err != nil {
-			return err
-		}
-		if respBytes, err = json.Marshal(resp); err != nil {
-			return err
-		}
-		return c.Produce(respTopic, respBytes)
-	}
-	var fieldsFunc = func(f *logger.Fields) {
-		f.With("msg", json.RawMessage(msg.Value))
-		f.With("resp", json.RawMessage(respBytes))
-	}
+	p := c.processor(msg)
 
 	var wait = time.Second
 	for {
-		c.Logger.Record(debug, workFunc, nil, fieldsFunc)
-		if endLoop {
+		c.Logger.Record(debug, p.WorkFunc, nil, p.FieldsFunc)
+		if p.endLoop {
 			break
 		}
-		retryTimes++
+		p.retryTimes++
 		if wait < time.Minute {
 			wait += wait
 			if wait > time.Minute {
@@ -120,6 +112,28 @@ func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
 			}
 		}
 	}
+}
+
+// get processor of consumer
+func (c *Consumer) processor(msg *sarama.ConsumerMessage) *Processor {
+	p := &Processor{}
+	p.WorkFunc = func(ctx context.Context) error {
+		respTopicSuffix, resp, retry, err := c.Handler(ctx, msg, p.retryTimes)
+		respTopic := c.RespTopic + respTopicSuffix
+		p.endLoop = !retry
+		if respTopic == "" || resp == nil || err != nil {
+			return err
+		}
+		if p.respBytes, err = json.Marshal(resp); err != nil {
+			return err
+		}
+		return c.Produce(respTopic, p.respBytes)
+	}
+	p.FieldsFunc = func(f *logger.Fields) {
+		f.With("msg", json.RawMessage(msg.Value))
+		f.With("resp", json.RawMessage(p.respBytes))
+	}
+	return p
 }
 
 // produce the response if necessary
