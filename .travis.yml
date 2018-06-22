@@ -5,6 +5,7 @@ go:
   - "1.10"
 before_install:
   - nohup docker run -p 2181:2181 -p 9092:9092 --env ADVERTISED_HOST=localhost --env TOPICS=consumer-test-topic,producer-test-topic spotify/kafka > tmp 2>&1 &
+  - go get github.com/lovego/logger
   - cd $GOPATH/src/github.com/lovego/logger && git checkout new_json && cd -
 install:
   - go get -t ./...
