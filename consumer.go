@@ -130,7 +130,7 @@ func (c *Consumer) processor(msg *sarama.ConsumerMessage) *Processor {
 		return c.Produce(respTopic, p.respBytes)
 	}
 	p.FieldsFunc = func(f *logger.Fields) {
-		f.With("msg", json.RawMessage(msg.Value))
+		f.With("data", json.RawMessage(msg.Value))
 		f.With("resp", json.RawMessage(p.respBytes))
 	}
 	return p
