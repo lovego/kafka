@@ -111,6 +111,7 @@ func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
 				wait = time.Minute
 			}
 		}
+		time.Sleep(wait)
 	}
 }
 
