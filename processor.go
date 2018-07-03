@@ -18,8 +18,10 @@ type Processor struct {
 }
 
 // new a processor
+//  Processor retry default true,
+//  and you can return false with handler third returns if you do not want.
 func newProcessor(c *Consumer, msg *sarama.ConsumerMessage) *Processor {
-	return &Processor{c: c, msg: msg}
+	return &Processor{c: c, msg: msg, retry: true}
 }
 
 // consumer process work func
