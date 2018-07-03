@@ -6,8 +6,6 @@ go:
 sudo: required
 before_install:
   - nohup docker run -p 2181:2181 -p 9092:9092 --env ADVERTISED_HOST=localhost --env ADVERTISED_PORT=9092 --env TOPICS=consumer-test-topic,producer-test-topic spotify/kafka > tmp 2>&1 &
-  - go get github.com/lovego/logger
-  - cd $GOPATH/src/github.com/lovego/logger && git checkout new_json && cd -
   - while true;do if sudo lsof -i:9092 -i:2181;then break;fi;sleep 0.1s;done
 install:
   - go get -t ./...
