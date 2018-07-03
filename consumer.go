@@ -58,6 +58,7 @@ func (c *Consumer) setup(group string, topics []string) bool {
 	conf.Producer.Return.Successes = true
 	conf.Consumer.Return.Errors = true
 	conf.Consumer.Offsets.Initial = sarama.OffsetOldest
+	conf.Version = sarama.V0_11_0_2
 	// conf.Consumer.Offsets.CommitInterval = time.Second
 	// conf.Group.Return.Notifications = true
 	client, err := cluster.NewClient(c.KafkaAddrs, conf)
