@@ -29,10 +29,11 @@ type testContent struct {
 
 func TestProduceAndConsume(t *testing.T) {
 	var testConsumer = &Consumer{
-		KafkaAddrs: testKafkaAddrs,
-		Handler:    testConsumerHandler,
-		RespTopic:  testProducerTopic,
-		Logger:     logger.New(os.Stderr),
+		KafkaAddrs:   testKafkaAddrs,
+		KafkaVersion: sarama.V0_10_1_0,
+		Handler:      testConsumerHandler,
+		RespTopic:    testProducerTopic,
+		Logger:       logger.New(os.Stderr),
 	}
 	go testConsumer.Consume(`test-consumer`, []string{testConsumerTopic}, true)
 	testConsumer.Close()

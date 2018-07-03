@@ -14,13 +14,14 @@ var debug = os.Getenv("debug-kafka") != ""
 
 // kafka consumer struct
 type Consumer struct {
-	KafkaAddrs []string
-	Handler    func(context.Context, *sarama.ConsumerMessage, int) (string, interface{}, bool, error)
-	Client     *cluster.Client
-	Consumer   *cluster.Consumer
-	Producer   sarama.SyncProducer
-	RespTopic  string
-	Logger     *logger.Logger
+	KafkaAddrs   []string
+	KafkaVersion sarama.KafkaVersion
+	Handler      func(context.Context, *sarama.ConsumerMessage, int) (string, interface{}, bool, error)
+	Client       *cluster.Client
+	Consumer     *cluster.Consumer
+	Producer     sarama.SyncProducer
+	RespTopic    string
+	Logger       *logger.Logger
 }
 
 // start consume, and it can produce response
@@ -58,7 +59,7 @@ func (c *Consumer) setup(group string, topics []string) bool {
 	conf.Producer.Return.Successes = true
 	conf.Consumer.Return.Errors = true
 	conf.Consumer.Offsets.Initial = sarama.OffsetOldest
-	conf.Version = sarama.V0_11_0_2
+	conf.Version = c.KafkaVersion
 	// conf.Consumer.Offsets.CommitInterval = time.Second
 	// conf.Group.Return.Notifications = true
 	client, err := cluster.NewClient(c.KafkaAddrs, conf)
