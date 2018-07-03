@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"time"
 
@@ -22,15 +21,6 @@ type Consumer struct {
 	Producer   sarama.SyncProducer
 	RespTopic  string
 	Logger     *logger.Logger
-}
-
-// kafka processor struct
-type Processor struct {
-	retryTimes int
-	respBytes  []byte
-	endLoop    bool
-	WorkFunc   func(ctx context.Context) error
-	FieldsFunc func(f *logger.Fields)
 }
 
 // start consume, and it can produce response
@@ -96,14 +86,11 @@ func (c *Consumer) setup(group string, topics []string) bool {
 
 // process data after consume
 func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
-	p := c.processor(msg)
+	p := newProcessor(c, msg)
 
 	var wait = time.Second
-	for {
+	for p.retry {
 		c.Logger.Record(debug, p.WorkFunc, nil, p.FieldsFunc)
-		if p.endLoop {
-			break
-		}
 		p.retryTimes++
 		if wait < time.Minute {
 			wait += wait
@@ -113,28 +100,6 @@ func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
 		}
 		time.Sleep(wait)
 	}
-}
-
-// get processor of consumer
-func (c *Consumer) processor(msg *sarama.ConsumerMessage) *Processor {
-	p := &Processor{}
-	p.WorkFunc = func(ctx context.Context) error {
-		respTopicSuffix, resp, retry, err := c.Handler(ctx, msg, p.retryTimes)
-		respTopic := c.RespTopic + respTopicSuffix
-		p.endLoop = !retry
-		if respTopic == "" || resp == nil || err != nil {
-			return err
-		}
-		if p.respBytes, err = json.Marshal(resp); err != nil {
-			return err
-		}
-		return c.Produce(respTopic, p.respBytes)
-	}
-	p.FieldsFunc = func(f *logger.Fields) {
-		f.With("data", json.RawMessage(msg.Value))
-		f.With("resp", json.RawMessage(p.respBytes))
-	}
-	return p
 }
 
 // produce the response if necessary
