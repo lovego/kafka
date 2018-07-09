@@ -41,6 +41,11 @@ func (p *Processor) WorkFunc(ctx context.Context) error {
 // consumer process record fields func
 func (p *Processor) FieldsFunc(f *logger.Fields) {
 	f.With("_retry", p.retryTimes)
-	f.With("data", json.RawMessage(p.msg.Value))
+	var v interface{}
+	if err := json.Unmarshal([]byte(`"a"`), &v); err == nil {
+		f.With("data", json.RawMessage(p.msg.Value))
+	} else {
+		f.With("dataRaw", string(p.msg.Value))
+	}
 	f.With("resp", json.RawMessage(p.respBytes))
 }
