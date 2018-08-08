@@ -3,7 +3,6 @@ package kafka
 import (
 	"context"
 	"os"
-	"time"
 
 	"github.com/Shopify/sarama"
 	cluster "github.com/bsm/sarama-cluster"
@@ -16,7 +15,7 @@ var debug = os.Getenv("debug-kafka") != ""
 type Consumer struct {
 	KafkaAddrs   []string
 	KafkaVersion sarama.KafkaVersion
-	Handler      func(context.Context, *sarama.ConsumerMessage, int) (string, interface{}, bool, error)
+	Handler      func(context.Context, *sarama.ConsumerMessage, int) (Result, error)
 	Client       *cluster.Client
 	Consumer     *cluster.Consumer
 	Producer     sarama.SyncProducer
@@ -37,7 +36,7 @@ func (c *Consumer) Consume(group string, topics []string, commit bool) {
 	for {
 		select {
 		case msg := <-messagesChannel:
-			c.Process(msg)
+			Process(c, msg)
 			c.Consumer.MarkOffset(msg, "")
 			if commit {
 				if err := c.Consumer.CommitOffsets(); err != nil {
@@ -84,24 +83,6 @@ func (c *Consumer) setup(group string, topics []string) bool {
 	c.Producer = producer
 
 	return true
-}
-
-// process data after consume
-func (c *Consumer) Process(msg *sarama.ConsumerMessage) {
-	p := newProcessor(c, msg)
-
-	var wait = time.Second
-	for p.retry {
-		c.Logger.Record(debug, p.WorkFunc, nil, p.FieldsFunc)
-		p.retryTimes++
-		if wait < time.Minute {
-			wait += wait
-			if wait > time.Minute {
-				wait = time.Minute
-			}
-		}
-		time.Sleep(wait)
-	}
 }
 
 // produce the response if necessary
