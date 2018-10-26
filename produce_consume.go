@@ -56,5 +56,4 @@ func Consume(kafkaAddrs, topics []string, group string, wait time.Duration) (
 			}
 		}
 	}
-	return
 }
