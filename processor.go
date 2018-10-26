@@ -30,7 +30,7 @@ func Process(c *Consumer, msg *sarama.ConsumerMessage) {
 	p := &Processor{c: c, msg: msg}
 
 	for {
-		c.Logger.Record(debug, p.WorkFunc, nil, p.FieldsFunc)
+		c.Logger.Record(p.WorkFunc, nil, p.FieldsFunc)
 		if !p.Result.Retry {
 			return
 		}

@@ -2,14 +2,11 @@ package kafka
 
 import (
 	"context"
-	"os"
 
 	"github.com/Shopify/sarama"
 	cluster "github.com/bsm/sarama-cluster"
 	"github.com/lovego/logger"
 )
-
-var debug = os.Getenv("debug-kafka") != ""
 
 // kafka consumer struct
 type Consumer struct {
