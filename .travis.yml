@@ -6,7 +6,7 @@ go:
 sudo: required
 before_install:
   - nohup docker run -p 2181:2181 -p 9092:9092 --env ADVERTISED_HOST=localhost --env ADVERTISED_PORT=9092 --env TOPICS=consumer-test-topic,producer-test-topic spotify/kafka > tmp 2>&1 &
-  - while true;do if sudo lsof -i:9092 -i:2181;then break;fi;sleep 0.1s;done
+  - while true;do if sudo lsof -i:9092 -i:2181;then break;fi;sleep 0.1s;done; sleep 5
 install:
   - go get -t ./...
   - go get golang.org/x/tools/cmd/cover
