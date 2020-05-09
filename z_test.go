@@ -40,7 +40,7 @@ func testConsumerHandler(
 func TestProduceAndConsume(t *testing.T) {
 	var testConsumer = &Consumer{
 		KafkaAddrs:   testKafkaAddrs,
-		KafkaVersion: sarama.V0_10_1_0,
+		KafkaVersion: sarama.V1_0_0_0,
 		Handler:      testConsumerHandler,
 		RespTopic:    testProducerTopic,
 		Logger:       logger.New(os.Stderr),
@@ -68,11 +68,11 @@ func TestProduceAndConsume(t *testing.T) {
 }
 
 func checkTestData(data testContent) error {
-	if !data.At.Equal(testData.At) {
-		return errors.New("consume: at not equal")
-	}
 	if data.Data != testData.Data {
 		return errors.New("consume: data not equal")
+	}
+	if !data.At.Equal(testData.At) {
+		return errors.New("consume: at not equal")
 	}
 	return nil
 }
