@@ -42,10 +42,6 @@ func (c *Consumer) Consume(group string, topics []string, commit bool) {
 			}
 		case err := <-errorsChannel:
 			c.Logger.Error(err)
-			/*
-				case ntf := <-consumer.Notifications():
-					c.Logger.Print(ntf)
-			*/
 		}
 	}
 }
