@@ -52,7 +52,7 @@ func (c *Consumer) setup(group string, topics []string) bool {
 	conf.Consumer.Return.Errors = true
 	conf.Consumer.Offsets.Initial = sarama.OffsetOldest
 	conf.Version = c.KafkaVersion
-	// conf.Consumer.Offsets.CommitInterval = time.Second
+	conf.Consumer.Offsets.AutoCommit.Enable = true
 	// conf.Group.Return.Notifications = true
 	client, err := cluster.NewClient(c.KafkaAddrs, conf)
 	if err != nil {
